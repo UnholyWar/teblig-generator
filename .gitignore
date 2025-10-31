@@ -1,0 +1,11 @@
+# Node modules
+node_modules/
+npm-debug.log*
+
+# Temporary folders
+uploads/
+public/output/
+
+# System
+.DS_Store
+Thumbs.db
