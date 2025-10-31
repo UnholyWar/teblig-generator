@@ -15,7 +15,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 🧩 2. Node.js ortamı (isteğe bağlı testler için)
+      # 🧩 2. Node.js ortamı (isteğe bağlı)
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -29,7 +29,7 @@ jobs:
       - name: Check syntax
         run: node -c server.js
 
-      # 🧩 5. GHCR'a login ol (GitHub Container Registry)
+      # 🧩 5. GHCR’a login ol
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -37,11 +37,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 🧩 6. Build ve Push (küçük harf düzeltmesi dahil)
+      # 🧩 6. Build ve push (manuel lowercase)
       - name: Build and Push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository_owner && github.repository_owner != '' && toLower(github.repository_owner) || 'unholywar' }}/teblig-generator:latest
+          tags: ghcr.io/unholywar/teblig-generator:latest
