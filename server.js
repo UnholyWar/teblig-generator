@@ -15,21 +15,21 @@ let progressData = { percent: 0, message: "Hazır", ready: false };
 
 // 📡 Progress endpoint
 app.get("/progress", (req, res) => {
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    const interval = setInterval(() => {
-        res.write(`data: ${JSON.stringify(progressData)}\n\n`);
-    }, 500);
-    req.on("close", () => clearInterval(interval));
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  const interval = setInterval(() => {
+    res.write(`data: ${JSON.stringify(progressData)}\n\n`);
+  }, 500);
+  req.on("close", () => clearInterval(interval));
 });
 
 // 🏠 Ana sayfa
 app.get("/", async (req, res) => {
-    const templatesPath = path.join(__dirname, "public/templates");
-    const files = await fs.readdir(templatesPath);
-    const htmlTemplates = files.filter(f => f.endsWith(".html"));
+  const templatesPath = path.join(__dirname, "public/templates");
+  const files = await fs.readdir(templatesPath);
+  const htmlTemplates = files.filter(f => f.endsWith(".html"));
 
-    res.send(`
+  res.send(`
   <html lang="tr">
   <head>
     <meta charset="UTF-8" />
@@ -169,109 +169,111 @@ app.get("/", async (req, res) => {
 
 // 📄 PDF oluşturma
 app.post("/generate", upload.single("excel"), async (req, res) => {
-    try {
-        const templateName = req.body.template;
-        const templatePath = path.join("public/templates", templateName);
-        let htmlTemplate = await fs.readFile(templatePath, "utf8");
+  try {
+    const templateName = req.body.template;
+    const templatePath = path.join("public/templates", templateName);
+    let htmlTemplate = await fs.readFile(templatePath, "utf8");
 
-        const workbook = XLSX.readFile(req.file.path);
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(sheet);
+    const workbook = XLSX.readFile(req.file.path);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet);
 
-        const outputDir = path.join(__dirname, "public", "output");
-        await fs.ensureDir(outputDir);
-        await fs.emptyDir(outputDir);
+    const outputDir = path.join(__dirname, "public", "output");
+    await fs.ensureDir(outputDir);
+    await fs.emptyDir(outputDir);
 
-        const browser = await puppeteer.launch({
-            headless: true,
-            args: ["--no-sandbox", "--disable-setuid-sandbox"]
-        });
-        const page = await browser.newPage();
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"]
+    });
+    const page = await browser.newPage();
 
-        const total = rows.length;
-        const pdfFiles = [];
+    const total = rows.length;
+    const pdfFiles = [];
 
-        for (let i = 0; i < total; i++) {
-            let html = htmlTemplate;
+    for (let i = 0; i < total; i++) {
+      let html = htmlTemplate;
 
-            // 🧩 Excel değişkenlerini yerleştir
-            for (const [key, value] of Object.entries(rows[i])) {
-                html = html.replace(new RegExp(`{{${key}}}`, "g"), value || "");
-            }
+      // 🧩 Excel değişkenlerini yerleştir
+      for (const [key, value] of Object.entries(rows[i])) {
+        html = html.replace(new RegExp(`{{${key}}}`, "g"), value || "");
+      }
 
-            // 🖼️ Görselleri base64 inline hale getir (background + img)
-            html = html.replace(/url\(['"]?(.*?)['"]?\)/g, (match, src) => {
-                if (src.startsWith("http") || src.startsWith("data:")) return match;
-                try {
-                    const imgPath = path.join(__dirname, "public", "templates", src);
-                    if (fs.existsSync(imgPath)) {
-                        const mime = src.endsWith(".png") ? "image/png" : "image/jpeg";
-                        const base64 = fs.readFileSync(imgPath, { encoding: "base64" });
-                        return `url('data:${mime};base64,${base64}')`;
-                    }
-                } catch (err) {
-                    console.error("⚠️ Background image yüklenemedi:", src, err.message);
-                }
-                return match;
-            });
-
-            html = html.replace(/<img[^>]+src=['"]([^'"]+)['"][^>]*>/g, (match, src) => {
-                if (src.startsWith("http") || src.startsWith("data:")) return match;
-                try {
-                    const imgPath = path.join(__dirname, "public", "templates", src);
-                    if (fs.existsSync(imgPath)) {
-                        const mime = src.endsWith(".png") ? "image/png" : "image/jpeg";
-                        const base64 = fs.readFileSync(imgPath, { encoding: "base64" });
-                        return match.replace(src, `data:${mime};base64,${base64}`);
-                    }
-                } catch (err) {
-                    console.error("⚠️ <img> yüklenemedi:", src, err.message);
-                }
-                return match;
-            });
-
-            const fileName = `${templateName.replace(".html", "")}_${i + 1}.pdf`;
-            const outPath = path.join(outputDir, fileName);
-
-            await page.goto("about:blank");
-            await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 0 });
-            await page.pdf({ path: outPath, format: "A4", printBackground: true });
-            pdfFiles.push(outPath);
-
-            const percent = Math.round(((i + 1) / total) * 100);
-            progressData = { percent, message: `${i + 1}/${total} tamamlandı`, ready: false };
-            console.log(progressData.message);
+      // 🖼️ Görselleri base64 inline hale getir (background + img)
+      html = html.replace(/url\(['"]?(.*?)['"]?\)/g, (match, src) => {
+        if (src.startsWith("http") || src.startsWith("data:")) return match;
+        try {
+          const imgPath = path.join(__dirname, "public", "templates", src);
+          if (fs.existsSync(imgPath)) {
+            const mime = src.endsWith(".png") ? "image/png" : "image/jpeg";
+            const base64 = fs.readFileSync(imgPath, { encoding: "base64" });
+            return `url('data:${mime};base64,${base64}')`;
+          }
+        } catch (err) {
+          console.error("⚠️ Background image yüklenemedi:", src, err.message);
         }
+        return match;
+      });
 
-        await browser.close();
+      html = html.replace(/<img[^>]+src=['"]([^'"]+)['"][^>]*>/g, (match, src) => {
+        if (src.startsWith("http") || src.startsWith("data:")) return match;
+        try {
+          const imgPath = path.join(__dirname, "public", "templates", src);
+          if (fs.existsSync(imgPath)) {
+            const mime = src.endsWith(".png") ? "image/png" : "image/jpeg";
+            const base64 = fs.readFileSync(imgPath, { encoding: "base64" });
+            return match.replace(src, `data:${mime};base64,${base64}`);
+          }
+        } catch (err) {
+          console.error("⚠️ <img> yüklenemedi:", src, err.message);
+        }
+        return match;
+      });
 
-        // 🔹 ZIP oluştur
-        const zipPath = path.join(outputDir, "result.zip");
-        const output = fs.createWriteStream(zipPath);
-        const archive = archiver("zip", { zlib: { level: 9 } });
-        archive.pipe(output);
-        pdfFiles.forEach(f => archive.file(f, { name: path.basename(f) }));
-        await archive.finalize();
+      const tc = rows[i].tc ? rows[i].tc.toString().trim() : `kayit${i + 1}`;
+      const fileName = `${tc}.pdf`;
 
-        progressData = { percent: 100, message: "✅ PDF'ler hazır!", ready: true };
-        res.status(200).end();
+      const outPath = path.join(outputDir, fileName);
 
-    } catch (err) {
-        console.error("❌ Hata:", err);
-        res.status(500).send("Bir hata oluştu: " + err.message);
+      await page.goto("about:blank");
+      await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 0 });
+      await page.pdf({ path: outPath, format: "A4", printBackground: true });
+      pdfFiles.push(outPath);
+
+      const percent = Math.round(((i + 1) / total) * 100);
+      progressData = { percent, message: `${i + 1}/${total} tamamlandı`, ready: false };
+      console.log(progressData.message);
     }
+
+    await browser.close();
+
+    // 🔹 ZIP oluştur
+    const zipPath = path.join(outputDir, "result.zip");
+    const output = fs.createWriteStream(zipPath);
+    const archive = archiver("zip", { zlib: { level: 9 } });
+    archive.pipe(output);
+    pdfFiles.forEach(f => archive.file(f, { name: path.basename(f) }));
+    await archive.finalize();
+
+    progressData = { percent: 100, message: "✅ PDF'ler hazır!", ready: true };
+    res.status(200).end();
+
+  } catch (err) {
+    console.error("❌ Hata:", err);
+    res.status(500).send("Bir hata oluştu: " + err.message);
+  }
 });
 
 // 🧹 Manuel temizlik endpoint
 app.get("/cleanup", async (req, res) => {
-    const outputDir = path.join(__dirname, "public", "output");
-    await fs.emptyDir(outputDir);
-    progressData = { percent: 0, message: "Hazır", ready: false };
-    console.log("🧹 output klasörü temizlendi.");
-    res.send("Temizlik tamamlandı");
+  const outputDir = path.join(__dirname, "public", "output");
+  await fs.emptyDir(outputDir);
+  progressData = { percent: 0, message: "Hazır", ready: false };
+  console.log("🧹 output klasörü temizlendi.");
+  res.send("Temizlik tamamlandı");
 });
 
 // 🚀 Sunucu
 app.listen(3000, () => {
-    console.log("✅ Tebliğ Generator (Base64 + Manuel Download) çalışıyor: http://localhost:3000");
+  console.log("✅ Tebliğ Generator (Base64 + Manuel Download) çalışıyor: http://localhost:3000");
 });
