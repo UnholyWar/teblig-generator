@@ -13,6 +13,36 @@ app.use(express.static("public"));
 
 let progressData = { percent: 0, message: "Hazır", ready: false };
 
+// 🔹 Sayaç dosyası yolu
+const counterFile = path.join(__dirname, "counter.json");
+
+// 🔹 Sayaç okuma
+async function getCounter() {
+  try {
+    const data = await fs.readFile(counterFile, "utf8");
+    const json = JSON.parse(data);
+    const today = new Date().toISOString().split("T")[0];
+    if (json.date !== today) {
+      // Gün değiştiyse sayaç sıfırla
+      json.date = today;
+      json.lastNumber = 0;
+      await fs.writeFile(counterFile, JSON.stringify(json, null, 2));
+    }
+    return json.lastNumber || 0;
+  } catch (err) {
+    // Dosya yoksa oluştur
+    const today = new Date().toISOString().split("T")[0];
+    await fs.writeFile(counterFile, JSON.stringify({ date: today, lastNumber: 0 }, null, 2));
+    return 0;
+  }
+}
+
+// 🔹 Sayaç güncelleme
+async function updateCounter(newValue) {
+  const today = new Date().toISOString().split("T")[0];
+  await fs.writeFile(counterFile, JSON.stringify({ date: today, lastNumber: newValue }, null, 2));
+}
+
 // 📡 Progress endpoint
 app.get("/progress", (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
@@ -35,74 +65,114 @@ app.get("/", async (req, res) => {
     <meta charset="UTF-8" />
     <title>Tebliğ Generator</title>
     <style>
-      body {
-        font-family: Arial;
-        padding: 40px;
-        background: #f8f9fa;
-        display: flex;
-        justify-content: center;
-      }
-      form {
-        background: #fff;
-        padding: 25px;
-        border-radius: 10px;
-        box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        width: 420px;
-        position: relative;
-      }
-      label {
-        display: block;
-        margin-top: 15px;
-        font-weight: bold;
-      }
-      input, select {
-        width: 100%;
-        margin-top: 5px;
-        padding: 8px;
-        border: 1px solid #ccc;
-        border-radius: 5px;
-      }
-      button {
-        margin-top: 20px;
-        width: 100%;
-        padding: 10px;
-        background: #0d6efd;
-        color: #fff;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: 16px;
-      }
-      button:hover { background: #0b5ed7; }
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    padding: 40px;
+    background: #f8f9fa;
+    display: flex;
+    justify-content: center;
+  }
 
-      #progress {
-        margin-top: 15px;
-        width: 100%;
-        height: 20px;
-        background: #eee;
-        border-radius: 5px;
-        overflow: hidden;
-        display: none;
-      }
-      #bar {
-        width: 0%;
-        height: 100%;
-        background: #0d6efd;
-        transition: width 0.3s;
-      }
-      #downloadBtn {
-        display: none;
-        margin-top: 20px;
-        background: #198754;
-      }
-      #downloadBtn:hover {
-        background: #157347;
-      }
-    </style>
+  form {
+    background: #ffffff;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.1);
+    width: 450px;
+    position: relative;
+  }
+
+  h2 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 20px;
+  }
+
+  label {
+    display: block;
+    margin-top: 15px;
+    font-weight: 600;
+    color: #555;
+  }
+
+  input, select {
+    width: 100%;
+    margin-top: 8px;
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 16px;
+    color: #333;
+  }
+
+  input[type="file"] {
+    border: none;
+    padding: 8px;
+    background-color: #f8f9fa;
+  }
+
+  button {
+    margin-top: 20px;
+    width: 100%;
+    padding: 12px;
+    background: #007bff;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background 0.3s ease;
+  }
+
+  button:hover {
+    background: #0056b3;
+  }
+
+  #progress {
+    margin-top: 15px;
+    width: 100%;
+    height: 20px;
+    background: #f0f0f0;
+    border-radius: 10px;
+    overflow: hidden;
+    display: none;
+  }
+
+  #bar {
+    width: 0%;
+    height: 100%;
+    background: #28a745;
+    transition: width 0.3s ease;
+  }
+
+  #downloadBtn {
+    display: none;
+    margin-top: 20px;
+    background: #28a745;
+    padding: 12px;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+  }
+
+  #downloadBtn:hover {
+    background: #218838;
+  }
+
+  #status {
+    margin-top: 10px;
+    font-size: 16px;
+    color: #333;
+  }
+</style>
+
   </head>
   <body>
     <form id="form" enctype="multipart/form-data">
-      <h2>📄 Tebliğ Mazbatası Generator</h2>
+      <h2>Tebliğ Pdf Oluşturucu </h2>
       <label>Excel Dosyası:</label>
       <input type="file" name="excel" accept=".xlsx" required />
 
@@ -127,7 +197,7 @@ app.get("/", async (req, res) => {
       const downloadBtn = document.getElementById("downloadBtn");
 
       form.addEventListener("submit", async (e) => {
-        e.preventDefault(); // Sayfa yenilenmesin
+        e.preventDefault();
         progress.style.display = "block";
         bar.style.width = "20%";
         status.textContent = "İşlem başlatıldı...";
@@ -148,7 +218,7 @@ app.get("/", async (req, res) => {
 
         if (data.ready) {
           downloadBtn.style.display = "block";
-          status.textContent = "✅ PDF'ler hazır, indirilmeye hazır!";
+          status.textContent = "✅ PDF'ler hazır!";
         }
       };
 
@@ -191,15 +261,28 @@ app.post("/generate", upload.single("excel"), async (req, res) => {
     const total = rows.length;
     const pdfFiles = [];
 
+    // 🔹 Sayaçtan son değeri al
+    let lastNumber = await getCounter();
+
     for (let i = 0; i < total; i++) {
+      lastNumber++; // her belge için +1
       let html = htmlTemplate;
+
+      // 🔹 Barkod & Tebliğ tarihi
+      const barkod = new Date().getFullYear().toString() + lastNumber.toString().padStart(12, "0");
+      const tebligTarihi = new Date().toLocaleDateString("tr-TR");
 
       // 🧩 Excel değişkenlerini yerleştir
       for (const [key, value] of Object.entries(rows[i])) {
         html = html.replace(new RegExp(`{{${key}}}`, "g"), value || "");
       }
 
-      // 🖼️ Görselleri base64 inline hale getir (background + img)
+      // 🔹 Barkod & tarih değişkenleri
+      html = html
+        .replace(/{{BARKOD}}/g, barkod)
+        .replace(/{{TEBLIG_TARIHI}}/g, tebligTarihi);
+
+      // 🖼️ Görselleri base64 inline hale getir
       html = html.replace(/url\(['"]?(.*?)['"]?\)/g, (match, src) => {
         if (src.startsWith("http") || src.startsWith("data:")) return match;
         try {
@@ -209,9 +292,7 @@ app.post("/generate", upload.single("excel"), async (req, res) => {
             const base64 = fs.readFileSync(imgPath, { encoding: "base64" });
             return `url('data:${mime};base64,${base64}')`;
           }
-        } catch (err) {
-          console.error("⚠️ Background image yüklenemedi:", src, err.message);
-        }
+        } catch { }
         return match;
       });
 
@@ -224,9 +305,7 @@ app.post("/generate", upload.single("excel"), async (req, res) => {
             const base64 = fs.readFileSync(imgPath, { encoding: "base64" });
             return match.replace(src, `data:${mime};base64,${base64}`);
           }
-        } catch (err) {
-          console.error("⚠️ <img> yüklenemedi:", src, err.message);
-        }
+        } catch { }
         return match;
       });
 
@@ -244,6 +323,9 @@ app.post("/generate", upload.single("excel"), async (req, res) => {
       progressData = { percent, message: `${i + 1}/${total} tamamlandı`, ready: false };
       console.log(progressData.message);
     }
+
+    // 🔹 Sayaç güncelle
+    await updateCounter(lastNumber);
 
     await browser.close();
 
@@ -264,7 +346,7 @@ app.post("/generate", upload.single("excel"), async (req, res) => {
   }
 });
 
-// 🧹 Manuel temizlik endpoint
+// 🧹 Temizlik endpoint
 app.get("/cleanup", async (req, res) => {
   const outputDir = path.join(__dirname, "public", "output");
   await fs.emptyDir(outputDir);
@@ -275,5 +357,5 @@ app.get("/cleanup", async (req, res) => {
 
 // 🚀 Sunucu
 app.listen(3000, () => {
-  console.log("✅ Tebliğ Generator (Base64 + Manuel Download) çalışıyor: http://localhost:3000");
+  console.log("✅ Tebliğ Generator çalışıyor: http://localhost:3000");
 });
